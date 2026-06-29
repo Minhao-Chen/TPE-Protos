@@ -24,7 +24,7 @@
 
 #include "args.h"
 #include "selector.h"
-#include "echo.h"
+#include "socks5.h"
 
 static bool done = false;
 
@@ -91,7 +91,7 @@ main(const int argc, char **argv) {
     if (server < 0) {
         goto finally;
     }
-    fprintf(stdout, "Listening (echo) on TCP %s:%d\n",
+    fprintf(stdout, "Listening (SOCKS5) on TCP %s:%d\n",
             args.socks_addr, args.socks_port);
 
     signal(SIGTERM, sigterm_handler);
@@ -116,7 +116,7 @@ main(const int argc, char **argv) {
     }
 
     const struct fd_handler passive = {
-        .handle_read  = echo_passive_accept,
+        .handle_read  = socks5_passive_accept,
         .handle_write = NULL,
         .handle_close = NULL,
     };
