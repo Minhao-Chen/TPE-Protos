@@ -61,6 +61,7 @@ usage(const char* progname)
             "   -L <conf  addr>  Dirección donde servirá el servicio de management.\n"
             "   -p <SOCKS port>  Puerto entrante conexiones SOCKS.\n"
             "   -P <conf port>   Puerto entrante conexiones configuracion\n"
+            "   -t <name>:<pass> Credenciales del administrador del protocolo de management.\n"
             "   -u <name>:<pass> Usuario y contraseña de usuario que puede usar el proxy. Hasta 10.\n"
             "   -v               Imprime información sobre la versión versión y termina.\n"
 
@@ -82,6 +83,10 @@ parse_args(const int argc, char** argv, struct socks5args* args)
 
     args->disectors_enabled = true;
 
+    /* credenciales de admin para el protocolo de management; override con -t */
+    args->admin_user = "admin";
+    args->admin_pass = "admin";
+
     int c;
     int nusers = 0;
 
@@ -92,7 +97,7 @@ parse_args(const int argc, char** argv, struct socks5args* args)
             {0, 0, 0, 0}
         };
 
-        c = getopt_long(argc, argv, "hl:L:Np:P:u:v", long_options, &option_index);
+        c = getopt_long(argc, argv, "hl:L:Np:P:t:u:v", long_options, &option_index);
         if (c == -1)
             break;
 
@@ -116,6 +121,14 @@ parse_args(const int argc, char** argv, struct socks5args* args)
         case 'P':
             args->mng_port = port(optarg);
             break;
+        case 't':
+        {
+            struct users admin;
+            user(optarg, &admin);
+            args->admin_user = admin.name;
+            args->admin_pass = admin.pass;
+            break;
+        }
         case 'u':
             if (nusers >= MAX_USERS)
             {

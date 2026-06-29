@@ -21,6 +21,10 @@ struct socks5args
 
     bool disectors_enabled;
 
+    /* credenciales del administrador para el protocolo de management (SMP) */
+    char* admin_user;
+    char* admin_pass;
+
     struct users users[MAX_USERS];
 };
 
