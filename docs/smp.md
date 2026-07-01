@@ -165,4 +165,4 @@ subcomandos:  add-user <name> <pass> | del-user <name> | list-users
 Flujo (bloqueante): conectar → leer `220` → `AUTH` (credenciales de `-u/-w` o
 variables de entorno o prompt) → si no es `250`, abortar → enviar el comando
 mapeado → imprimir la respuesta → `QUIT`. Sin subcomando, modo interactivo
-(REPL) opcional.
+(REPL) opcional. 
