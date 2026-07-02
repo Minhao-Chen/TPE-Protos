@@ -33,6 +33,7 @@
 #include "selector.h"
 #include "socks5.h"
 #include "users.h"
+#include "metrics.h"
 
 #define N(x)            (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key) ((struct socks5 *)(key)->data)
@@ -308,7 +309,7 @@ socks5_passive_accept(struct selector_key *key) {
                                               OP_READ, state)) {
         goto fail;
     }
-    /* TODO(metrics): metrics_connection_opened(); */
+    metrics_connection_opened();
     return;
 
 fail:
@@ -354,7 +355,7 @@ socksv5_close(struct selector_key *key) {
 /** desregistra y cierra ambos fds de la conexión */
 static void
 socksv5_done(struct selector_key *key) {
-    /* TODO(metrics): metrics_connection_closed(); */
+    metrics_connection_closed();
     const int fds[] = {
         ATTACHMENT(key)->client_fd,
         ATTACHMENT(key)->origin_fd,
@@ -717,6 +718,7 @@ request_read(struct selector_key *key) {
                             sizeof(sin))) {
             return REQUEST_CONNECT;
         }
+        metrics_connection_failed();
         return REQUEST_WRITE;
     } else {  /* ATYP_IPV6 */
         struct sockaddr_in6 sin6;
@@ -728,6 +730,7 @@ request_read(struct selector_key *key) {
                             sizeof(sin6))) {
             return REQUEST_CONNECT;
         }
+        metrics_connection_failed();
         return REQUEST_WRITE;
     }
 }
@@ -786,6 +789,7 @@ request_resolv_done(struct selector_key *key) {
     struct socks5 *s = ATTACHMENT(key);
     if (s->resolution_failed || s->origin_resolution == NULL) {
         s->reply = REP_HOST_UNREACHABLE;
+        metrics_connection_failed();
         return REQUEST_WRITE;
     }
     s->origin_next = s->origin_resolution;
@@ -839,6 +843,7 @@ connect_list(struct selector_key *key, struct socks5 *s) {
     if (s->reply == REP_SUCCESS) {
         s->reply = REP_HOST_UNREACHABLE;
     }
+    metrics_connection_failed();
     return REQUEST_WRITE;
 }
 
@@ -873,6 +878,7 @@ request_connect_done(struct selector_key *key) {
     if (s->origin_next != NULL) {
         return connect_list(key, s);
     }
+    metrics_connection_failed();
     return REQUEST_WRITE;
 }
 
@@ -1010,7 +1016,7 @@ copy_read(struct selector_key *key) {
     const ssize_t n = recv(key->fd, ptr, count, 0);
     if (n > 0) {
         buffer_write_adv(b, n);
-        /* TODO(metrics): metrics_add_bytes(n); */
+        metrics_add_bytes(n);
     } else if (n == 0) {
         if (key->fd == s->client_fd) {
             s->client_eof = true;
