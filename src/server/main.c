@@ -26,6 +26,9 @@
 #include "selector.h"
 #include "socks5.h"
 #include "metrics.h"
+#include "users.h"
+#include "access_log.h"
+#include "mgmt.h"
 
 static volatile sig_atomic_t done = 0;
 static volatile sig_atomic_t on_sig_end = 0;
@@ -85,6 +88,9 @@ main(const int argc, char **argv) {
     struct socks5args args;
     parse_args(argc, argv, &args);
 
+    users_init(&args);
+    access_log_init(stderr);
+
     // no tenemos nada que leer de stdin
     close(0);
 
@@ -100,6 +106,13 @@ main(const int argc, char **argv) {
     }
     fprintf(stdout, "Listening (SOCKS5) on TCP %s:%d\n",
             args.socks_addr, args.socks_port);
+
+    server_mng = create_passive_socket(args.mng_addr, args.mng_port, &err_msg);
+    if(server_mng < 0) {
+        goto finally;
+    }
+    fprintf(stdout, "Listening (MANAGEMENT) on TCP %s:%d\n",
+            args.mng_addr, args.mng_port);
 
     signal(SIGTERM, sigterm_handler);
     signal(SIGINT,  sigterm_handler);
@@ -122,6 +135,8 @@ main(const int argc, char **argv) {
         goto finally;
     }
 
+    mgmt_init(&args);
+
     const struct fd_handler passive = {
         .handle_read  = socks5_passive_accept,
         .handle_write = NULL,
@@ -130,6 +145,17 @@ main(const int argc, char **argv) {
     ss = selector_register(selector, server, &passive, OP_READ, NULL);
     if (ss != SELECTOR_SUCCESS) {
         err_msg = "registering passive socket";
+        goto finally;
+    }
+
+    const struct fd_handler passive_mng = {
+        .handle_read  = mgmt_passive_accept,
+        .handle_write = NULL,
+        .handle_close = NULL,
+    };
+    ss = selector_register(selector, server_mng, &passive_mng, OP_READ, NULL);
+    if (ss != SELECTOR_SUCCESS) {
+        err_msg = "registering management passive socket";
         goto finally;
     }
 
