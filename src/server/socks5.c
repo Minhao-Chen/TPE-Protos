@@ -32,6 +32,7 @@
 #include "stm.h"
 #include "selector.h"
 #include "socks5.h"
+#include "users.h"
 
 #define N(x)            (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key) ((struct socks5 *)(key)->data)
@@ -472,15 +473,9 @@ hello_write(struct selector_key *key) {
 /* AUTH (RFC1929)                                                      */
 /* ------------------------------------------------------------------ */
 
-/**
- * PROVISORIO: por ahora acepta cualquier credencial.
- * TODO: reemplazar por users_login(user, pass) de users.c.
- */
 static bool
 socks5_auth_check(const char *user, const char *pass) {
-    (void) user;
-    (void) pass;
-    return true;
+    return users_login(user, pass);
 }
 
 static enum parse_result
