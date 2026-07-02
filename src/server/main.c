@@ -25,13 +25,19 @@
 #include "args.h"
 #include "selector.h"
 #include "socks5.h"
+#include "metrics.h"
 
-static bool done = false;
+static volatile sig_atomic_t done = 0;
+static volatile sig_atomic_t on_sig_end = 0;
 
 static void
 sigterm_handler(const int signal) {
-    printf("signal %d, cleaning up and exiting\n", signal);
-    done = true;
+    (void) signal;
+    if (!on_sig_end) {
+        on_sig_end = 1;
+    } else {
+        done = 1;
+    }
 }
 
 /**
@@ -86,6 +92,7 @@ main(const int argc, char **argv) {
     selector_status ss       = SELECTOR_SUCCESS;
     fd_selector     selector = NULL;
     int             server   = -1;
+    int             server_mng = -1;
 
     server = create_passive_socket(args.socks_addr, args.socks_port, &err_msg);
     if (server < 0) {
@@ -127,6 +134,28 @@ main(const int argc, char **argv) {
     }
 
     while (!done) {
+        if (on_sig_end) {
+            // Dejar de aceptar nuevas conexiones en ambos sockets pasivos
+            if (server >= 0) {
+                selector_unregister_fd(selector, server);
+                close(server);
+                server = -1;
+            }
+            if (server_mng >= 0) {
+                selector_unregister_fd(selector, server_mng);
+                close(server_mng);
+                server_mng = -1;
+            }
+
+            // Verificar si ya no quedan conexiones vivas
+            struct metrics_snapshot snapshot;
+            metrics_snapshot(&snapshot);
+            if (snapshot.current_connections == 0) {
+                done = 1;
+                break;
+            }
+        }
+
         err_msg = NULL;
         ss = selector_select(selector);
         if (ss != SELECTOR_SUCCESS) {
@@ -153,6 +182,9 @@ finally:
 
     if (server >= 0) {
         close(server);
+    }
+    if (server_mng >= 0) {
+        close(server_mng);
     }
     return ret;
 }
