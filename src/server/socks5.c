@@ -27,6 +27,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 
 #include "buffer.h"
 #include "stm.h"
@@ -34,6 +35,7 @@
 #include "socks5.h"
 #include "users.h"
 #include "metrics.h"
+#include "access_log.h"
 
 #define N(x)            (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key) ((struct socks5 *)(key)->data)
@@ -159,6 +161,7 @@ struct socks5 {
     int                     origin_domain;
     bool                    resolution_failed;
     char                    fqdn[256];
+    char                    dest_addr[256];
     uint16_t                dst_port;             /* host order */
 
     uint8_t                 reply;                /* REP a enviar */
@@ -704,6 +707,7 @@ request_read(struct selector_key *key) {
     if (s->request.atyp == ATYP_DOMAIN) {
         memcpy(s->fqdn, s->request.addr, s->request.addr_len);
         s->fqdn[s->request.addr_len] = '\0';
+        strcpy(s->dest_addr, s->fqdn);
         return REQUEST_RESOLV;
     }
 
@@ -714,6 +718,7 @@ request_read(struct selector_key *key) {
         sin.sin_family = AF_INET;
         sin.sin_port   = htons(s->dst_port);
         memcpy(&sin.sin_addr, s->request.addr, 4);
+        inet_ntop(AF_INET, &sin.sin_addr, s->dest_addr, sizeof(s->dest_addr));
         if (connect_attempt(key, s, AF_INET, (struct sockaddr *) &sin,
                             sizeof(sin))) {
             return REQUEST_CONNECT;
@@ -726,6 +731,7 @@ request_read(struct selector_key *key) {
         sin6.sin6_family = AF_INET6;
         sin6.sin6_port   = htons(s->dst_port);
         memcpy(&sin6.sin6_addr, s->request.addr, 16);
+        inet_ntop(AF_INET6, &sin6.sin6_addr, s->dest_addr, sizeof(s->dest_addr));
         if (connect_attempt(key, s, AF_INET6, (struct sockaddr *) &sin6,
                             sizeof(sin6))) {
             return REQUEST_CONNECT;
@@ -930,6 +936,9 @@ request_write_init(unsigned state, struct selector_key *key) {
     if (s->origin_fd != -1) {
         selector_set_interest(key->s, s->origin_fd, OP_NOOP);
     }
+
+    const char *username = (s->hello.method == METHOD_USERPASS && s->auth.status == AUTH_STATUS_OK) ? s->auth.uname : "-";
+    access_log_record(username, (const struct sockaddr *) &s->client_addr, s->request.atyp, s->dest_addr, s->dst_port, s->reply);
 }
 
 static unsigned
